@@ -1,8 +1,7 @@
 import hx711, digitalio
-import machine
+import machine,json, time
 import network as nw
 import requests as rq
-from time import sleep
 from pn532_i2c import PN532_I2C
 
 # Initialize I2C
@@ -58,16 +57,19 @@ def connect_to_wifi():
 
 def mode_updateWeight():
     nfc_id = get_NFC_id()
-    if nfc_id != False:
+    try:
         spool_id = get_Spool_id(nfc_id)
-        weight = get_weight()
+        weight = get_remaining_weight(spool_id)
+        set_spool_weight(weight, spool_id)
+
+    except:
         pass
 
 
 
 def get_NFC_id():
     try:
-        Scale.tare()
+        
         nfc_id = pn532.read_passive_target(timeout=READ_NFC_TIMEOUT) #read the NFC ID
         if nfc_id:
             print("Found NFC tag with UID:", [hex(i) for i in nfc_id])
@@ -106,32 +108,42 @@ def get_weight():
     while (new_value/old_value < 0.999) or (new_value/old_value > 1.001):
         old_value = new_value
         new_value = Scale.get_units()
-
     return new_value
+
+def get_remaining_weight(spool_id, measured_weight):
+    spool_weight = do_API_get_call(f"/spool/{spool_id}")
+    spool_weight.json()
+    spool_weight = spool_weight[0]["spool_weight"]
+    remaining_weight = measured_weight - spool_weight
+    return remaining_weight
 
 def prepare_scale():
     Scale.set_scale(SCALE_SCALE)
     time.sleep(5)
     Scale.tare(5)
 
-## Spoolman functions
+def get_Spool_id(nfc_id):
+    self.nfc_id = nfc_id
+    spool_id = do_API_get_call(f"/spool?lot_nr={nfc_id}")
+    return spool_id
+
+def set_Spool_weight(spool_id, weight):
+    patch = {"remaining_weight":weight}
+    do_API_patch_call(f"/spool/{spool_id}", patch_argument)
+
+## Spoolman API Interaction
 
 def do_API_get_call(argument):
-    api_call = f"{SURL}{argument}"
-    response = requests.get(api_call)
+    api_call = f"{SURL}/api/v1{argument}"
+    response = rq.get(api_call)
     return response.json()
-def do_API_patch_call(argument):
+def do_API_patch_call(argument, patch_argument):
     api_call = f"{SURL}{argument}"
-    response = requests.patch(api_call)
+    response = requests.patch(api_call, json=patch_argument)
     return response.json()
     
 
-def get_Spool_id(nfc_id):
-    self.nfc_id = nfc_id
-    spool_id = do_API_call(f"/spool?lot_nr={nfc_id}")
 
-def set_Spool_weight(spool_id, weight):
-   pass 
 
 
 #machine interrupts
