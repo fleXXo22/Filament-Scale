@@ -118,7 +118,6 @@ def get_NFC_id():
 
     pass
 
-#v5 test
 def main_loop():
     while True:
         if not wlan.isconnected():
