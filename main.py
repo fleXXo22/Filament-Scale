@@ -60,11 +60,46 @@ def mode_updateWeight():
     try:
         spool_id = get_Spool_id(nfc_id)
         weight = get_remaining_weight(spool_id)
-        set_spool_weight(weight, spool_id)
+        set_Spool_weight(weight, spool_id)
 
     except:
+        LED_blink_red(0.25)
+        LED_blink_red(0.25)
+        
+
+def mode_addSpool():
+    nfc_id = get_NFC_id()
+    try:
+        exists = check_for_nfc_id(nfc_id)
+        if exists == True:
+            old_spool_id = get_Spool_id(nfc_id)
+            do_API_patch_call(f"/spool/{old_spool_id}", {"lot_nr=":""})
+        else:
+            pass
+        new_spool_id = get_newest_spool_id()
+        do_API_patch_call(f"/spool/{old_spool_id}", {"lot_nr=":f"{nfc_id}"})
+
+        LED_blink_green(0.25)
+
+        measured_weight = get_weight()
+        print(measured_weight)
+        filament_weight = do_API_get_call(f"/spools/{new_spool_id}")[0]["initial_weight"]
+        print(filament_weight)
+        spool_weight = measured_weight - filament_weight
+        print(spool_weight)
+
+        do_API_patch_call(f"/spool/{new_spool_id}", {"spool_weight":spool_weight}) #Patch the measured Spool Weight to the DB
+
+        LED_blink_green(1)
+
+
+        pass
+    except:    
         pass
 
+def mode_read_NFC():
+
+    pass
 
 
 def get_NFC_id():
@@ -83,11 +118,6 @@ def get_NFC_id():
 
     pass
 
-def mode_addSpool():
-    pass
-
-def mode_read_NFC():
-    pass
 
 def main_loop():
     while True:
@@ -98,7 +128,8 @@ def main_loop():
         elif Button2.value() == 1:
             mode_addSpool()
         else:
-            pass
+            mode_read_NFC()
+            machine.sleep(1)
 
 
 def get_weight():
@@ -111,9 +142,9 @@ def get_weight():
     return new_value
 
 def get_remaining_weight(spool_id, measured_weight):
-    spool_weight = do_API_get_call(f"/spool/{spool_id}")
-    spool_weight.json()
-    spool_weight = spool_weight[0]["spool_weight"]
+    spool_info = do_API_get_call(f"/spool/{spool_id}")
+    spool_info.json()
+    spool_weight = spool_info[0]["spool_weight"]
     remaining_weight = measured_weight - spool_weight
     return remaining_weight
 
@@ -127,20 +158,50 @@ def get_Spool_id(nfc_id):
     spool_id = do_API_get_call(f"/spool?lot_nr={nfc_id}")
     return spool_id
 
+def check_for_nfc_id(nfc_id):
+    
+    response = do_API_get_call(f"/spool?lot_nr={nfc_id}")
+    if response != False:   
+        return True
+    else: 
+        return False
+    
+
+def get_full_filament_weight(spool_id):
+    float:filament_weight = do_API_get_call(f"/spool/{spool_id}")[0]["initial_weight"]
+    return filament_weight  
+
 def set_Spool_weight(spool_id, weight):
     patch = {"remaining_weight":weight}
-    do_API_patch_call(f"/spool/{spool_id}", patch_argument)
+    do_API_patch_call(f"/spool/{spool_id}", patch)
+
+def get_newest_spool_id():
+    spool_id = do_API_get_call("/spool?sort=id:desc?limit=1").json()[0]["id"]
+    return spool_id
 
 ## Spoolman API Interaction
 
 def do_API_get_call(argument):
     api_call = f"{SURL}/api/v1{argument}"
     response = rq.get(api_call)
-    return response.json()
+    try:
+        response.json()[0]["id"] #checks if a valid spool is received
+        return response.json()
+    except: 
+        return False
+    
 def do_API_patch_call(argument, patch_argument):
-    api_call = f"{SURL}{argument}"
-    response = requests.patch(api_call, json=patch_argument)
-    return response.json()
+    api_call = f"{SURL}/api/v1{argument}"
+    response = rq.patch(api_call, json=patch_argument)
+    
+
+## LED Functions
+
+def LED_blink_red(length):
+    pass
+
+def LED_blink_green(lenght):
+    pass
     
 
 
@@ -151,6 +212,6 @@ Button1.irq(trigger=machine.Pin.IRQ_Falling, handler=interrupt)
 Button2.irq(trigger=machine.Pin.IRQ_Falling, handler=interrupt)
 
 
-pn532.SAM_configuration()
-prepare_scale()
-main_loop()
+#pn532.SAM_configuration()
+#prepare_scale()
+#main_loop()
