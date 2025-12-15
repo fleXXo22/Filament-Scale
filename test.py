@@ -30,3 +30,4 @@ def do_API_get_call(argument):
 spool_id = do_API_get_call(Argument)[0]["id"]
 print(spool_id)
 
+test2
